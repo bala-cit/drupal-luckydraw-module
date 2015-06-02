@@ -1,0 +1,18 @@
+<?php
+/**
+ * @file
+ *  Define wheel type of luckydraw
+ */
+
+function luckydraw_wheel_luckydraw_info() {
+  return array(
+    'name' => 'Wheel fortune',
+    'type' => 'wheel',
+    'description' => 'A wheel type of lucky draw',
+    'callback' => 'luckydraw_wheel_luckydraw_draw',
+  );
+}
+
+function luckydraw_wheel_luckydraw_draw() {
+
+}

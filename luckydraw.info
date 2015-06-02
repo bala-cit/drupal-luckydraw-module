@@ -1,0 +1,11 @@
+name = Lucky Draw
+description = To provides kinds of lucky draws which are common
+version = 7.x-1.0-dev
+core = 7.x
+package = "Lucky draw"
+
+dependencies[] = entity
+
+files[] = includes/luckydraw_type.admin.inc
+files[] = includes/luckydraw.admin.inc
+files[] = includes/luckydraw_item.admin.inc

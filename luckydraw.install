@@ -1,0 +1,181 @@
+<?php
+/**
+ * @file
+ *  Define luckydraw table schemas
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function luckydraw_schema() {
+  $schema['luckydraw'] = array(
+    'description' => 'The luckydraw entity table',
+    'fields' => array(
+      'lid' => array(
+        'description' => 'The primary identifier of luckydraw entity',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'name' => array(
+        'description' => 'The name of the luckydraw entity',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'type' => array(
+        'description' => 'The type of luckydraw entity',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'description' => array(
+        'description' => 'A brief introduction to the luckydraw entity',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+      ),
+      'uid' => array(
+        'description' => 'The user identifer of the owner of the item',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'created' => array(
+        'description' => 'Timestamp value of when the item is created',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'changed' => array(
+        'description' => 'Timestamp value of last time the item is updated',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'settings' => array(
+        'description' => 'A serialized configurations of the luckydraw entity',
+        'type' => 'text',
+        'size' => 'big',
+        'serialize' => TRUE,
+        'not null' => FALSE,
+      ),
+    ),
+    'primary key' => array('lid'),
+    'indexes' => array(
+      'type' => array('type')
+    ),
+  );
+
+  $schema['luckydraw_item'] = array(
+    'description' => 'The luckydraw item table describes each prize',
+    'fields' => array(
+      'liid' => array(
+        'description' => 'The primary identifier of luckydraw item',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'lid' => array(
+        'description' => 'The luckydraw entity id',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'name' => array(
+        'description' => 'The prize name of the item',
+        'type' => 'varchar',
+        'length' => 100,
+        'default' => '',
+      ),
+      'data' => array(
+        'description' => 'A serialized configration of luckydraw item',
+        'type' => 'text',
+        'serialize' => TRUE,
+        'size' => 'big',
+        'not null' => FALSE,
+      ),
+      'weight' => array(
+        'description' => 'The position of item',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'uid' => array(
+        'description' => 'The user identifer of the owner of the item',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'created' => array(
+        'description' => 'Timestamp value of when the item is created',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'changed' => array(
+        'description' => 'Timestamp value of last time the item is updated',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'foreign keys' => array(
+      'luckydraw' => array(
+        'table' => 'luckydraw',
+        'columns' => array('lid' => 'lid'),
+      ),
+    ),
+    'unique keys' => array(
+      'lid_liid' => array('lid', 'liid'),
+    ),
+    'primary key' => array('liid'),
+  );
+
+  $schema['luckydraw_type'] = array(
+    'description' => 'Luckydraw types',
+    'fields' => array(
+      'id' => array(
+        'description' => 'Primary key: unique luckydraw type identifer.',
+        'type' => 'serial',
+        'not null' => TRUE,
+      ),
+      'type' => array(
+        'description' => 'The machince name of luckydraw type.',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'name' => array(
+        'description' => 'The name of luckydraw type.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'description' => array(
+        'description' => 'An introduction to the type.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+    ),
+    'primary key' => array('id'),
+    'unique keys' => array(
+      'type' => array('type'),
+    ),
+  );
+
+  return $schema;
+}

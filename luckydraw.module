@@ -1,0 +1,306 @@
+<?php
+/**
+ * @file luckydraw.module
+ * Lucky draw
+ */
+
+module_load_include('inc', 'luckydraw', 'includes/controllers/LuckyDrawController');
+module_load_include('inc', 'luckydraw', 'includes/controllers/LuckyDrawTypeController');
+module_load_include('inc', 'luckydraw', 'includes/controllers/LuckyDrawItemController');
+
+module_load_include('inc', 'luckydraw', 'includes/entities/LuckyDraw');
+module_load_include('inc', 'luckydraw', 'includes/entities/LuckyDrawType');
+module_load_include('inc', 'luckydraw', 'includes/entities/LuckyDrawItem');
+
+/**
+ * Implements hook_entity_info().
+ * @see
+ *  https://www.drupal.org/node/878784
+ */
+function luckydraw_entity_info() {
+  $entity['luckydraw_item'] = array(
+    'label' => t('Luckydraw Item'),
+    'entity class' => 'LuckyDrawItem',
+    'controller class' => 'LuckyDrawItemController',
+    'base table' => 'luckydraw_item',
+    'fieldable' => FALSE,
+    'entity keys' => array(
+      'id' => 'liid',
+    ),
+    'bundles' => array(),
+    'load hook' => 'luckydraw_item_load',
+    'view modes' => array(
+      'full' => array(
+        'label' => t('Default'),
+        'custom settings' => TRUE,
+      ),
+    ),
+    'label callback' => 'entity_class_label',
+    'uri callback' => 'entity_class_uri',
+    'module' => 'luckydraw',
+    'access callback' => 'luckydraw_access',
+    'admin ui' => array(
+      'path' => 'admin/content/luckydraws/manage/%luckydraw/items',
+      'file' => 'includes/luckydraw_item.admin.inc',
+      'controller class' => 'LuckyDrawItemUIController',
+    ),
+  );
+
+  $entity['luckydraw'] = array(
+    'label' => t('Luckdraw entity'),
+    'entity class' => 'LuckyDraw',
+    'controller class' => 'LuckyDrawController',
+    'base table' => 'luckydraw',
+    'fieldable' => FALSE,
+    'entity keys' => array(
+      'id' => 'lid',
+    ),
+    'bundle keys' => array(
+      'bundle' => 'type',
+    ),
+    'bundles' => array(),
+    'load hook' => 'luckydraw_load',
+    'view modes' => array(
+      'full' => array(
+        'label' => t('Default'),
+        'custom settings' => TRUE,
+      ),
+    ),
+    'label callback' => 'entity_class_label',
+    'uri callback' => 'entity_class_uri',
+    'module' => 'luckydraw',
+    'access callback' => 'luckydraw_access',
+    'admin ui' => array(
+      'path' => 'admin/content/luckydraws',
+      'file' => 'includes/luckydraw.admin.inc',
+      'controller class' => 'LuckyDrawUIController',
+    ),
+  );
+
+  $entity['luckydraw_type'] = array(
+    'label' => t('Luckydraw Type'),
+    'entity class' => 'LuckyDrawType',
+    'controller class' => 'LuckyDrawTypeController',
+    'base table' => 'luckydraw_type',
+    'fieldable' => FALSE,
+    'bundle of' => 'luckydraw',
+    'bundles' => array(),
+    'exportable' => FALSE,
+    'entity keys' => array(
+      'id' => 'id',
+      'name' => 'type',
+      'label' => 'name',
+    ),
+    'module' => 'luckydraw',
+    'admin ui' => array(
+      'path' => 'admin/structure/luckydraw-types',
+      'menu wildcard' => '%luckydraw_type',
+      'file' => 'includes/luckydraw_type.admin.inc',
+      'controller class' => 'LuckyDrawTypeUIController',
+    ),
+    'access callback' => 'luckydraw_access',
+  );
+
+  return $entity;
+}
+
+/**
+ * Implements hook_entity_info_alter().
+ * To let Drupal understands the entities of luckydraw_type are bundles of
+ * luckydraw.
+ */
+function luckydraw_entity_info_alter(&$entity_info) {
+  foreach (luckydraw_get_types() as $type => $info) {
+    $entity_info['luckydraw']['bundles'][$type] = array(
+      'label' => $info->name,
+      'admin' => array(
+        'path' => 'admin/structure/luckydraw-types/manage/%luckydraw_type',
+        'real path' => 'admin/structure/luckydraw-types/manange/' . $type,
+        'bundle argument' => 4,
+      ),
+    );
+  }
+}
+
+/**
+ * Implements hook_menu().
+ * Add the menu items for luckydraw entity, most CRUD related.
+ */
+function luckydraw_menu() {
+  $items = array();
+
+  return $items;
+}
+
+/**
+ * Implements hook_access().
+ * Define luckydraw entities access callback.
+ */
+function luckydraw_access($op, $luckydraw = NULL, $account = NULL, $entity_type = NULL) {
+  global $user;
+
+  if (!isset($account)) {
+    $account = $user;
+  }
+
+  switch ($op) {
+    case 'create':
+      return user_access('administer luckydraw entities', $account)
+        || user_access('create luckydraw entities', $account);
+
+    case 'view':
+      return user_access('administer luckydraw entities', $account)
+        || user_access('view luckydraw entities', $account);
+
+    case 'edit':
+      return user_access('administer luckydraw entities')
+        || user_access('edit any luckydraw entities', $account);
+  }
+
+  return TRUE;
+}
+
+/**
+ * Implements hook_permision().
+ * Define luckydraw permissions.
+ */
+function luckydraw_permission() {
+  return array(
+    'administer luckydraw entities' => array(
+      'title' => t('Adminster luckydraw types'),
+      'description' => t('Allow users to configure luckydraw types.'),
+      'restrict access' => TRUE,
+    ),
+    'create luckydraw entities' => array(
+      'title' => t('Create luckydarw item'),
+      'description' => t('Allow users to create luckydraw items.'),
+      'restrict access' => TRUE,
+    ),
+    'view luckydraw entities' => array(
+      'title' => t('View luckydraw items'),
+      'description' => t('Allow users to view luckydraw items.'),
+      'restrict access' => TRUE,
+    ),
+    'edit any luckydraw entities' => array(
+      'title' => t('Edit any luckydraw items'),
+      'description' => t('Allows users to edit any luckydraw items.'),
+      'restrict access' => TRUE,
+    ),
+  );
+}
+
+/* luckydraw_type CRUD using entity api */
+
+function luckydraw_type_load($type_name) {
+  return luckydraw_get_types($type_name);
+}
+
+function luckydraw_get_types($type_name = NULL) {
+  $types = entity_load_multiple_by_name('luckydraw_type', isset($type_name) ? array($type_name) : FALSE);
+  return isset($type_name) ? reset($types) : $types;
+}
+
+function luckydraw_type_save($luckydraw_type) {
+  entity_save('luckydraw_type', $luckydraw_type);
+}
+
+function luckydraw_type_delete($luckydraw_type) {
+  entity_delete('luckydraw_type', entity_id('luckydraw_type', $luckydraw_type));
+}
+
+/* luckydraw CRUD using entity api */
+
+/**
+ * Load a single luckydraw and its items
+ */
+function luckydraw_load($lid, $reset = FALSE) {
+  $luckydraw_entities = luckydraw_load_multiple(array($lid), array(), $reset);
+  $luckydraw = reset($luckydraw_entities);
+  return $luckydraw;
+  // Append the items
+  //$luckydraw->items = luckydraw_items_load($lid, $reset);
+}
+
+/**
+ * Luckydraw loads multiple by calling entity_load.
+ */
+function luckydraw_load_multiple($lids = array(), $conditions = array(), $reset = FALSE) {
+  return entity_load('luckydraw', $lids, $conditions, $reset);
+}
+
+function luckydraw_save($luckydraw) {
+  entity_save('luckydraw', $luckydraw);
+}
+
+function luckydraw_delete($luckydraw) {
+  entity_delete('luckydraw', entity_id('luckydraw', $luckydraw));
+}
+
+/* luckydraw_item CRUD using entity api */
+
+/**
+ * Load a single luckydraw item
+ */
+function luckydraw_item_load($liid, $reset = FALSE) {
+  $items = luckydraw_item_load_multiple(array($liid), array(), $reset);
+  return reset($items);
+}
+
+function luckydraw_item_load_multiple($liids = array(), $conditions = array(), $reset = FALSE) {
+  return entity_load('luckydraw_item', $liids, $conditions, $reset);
+}
+
+function luckydraw_item_save($luckydraw_item) {
+  entity_save('luckydraw_item', $luckydraw_item);
+}
+
+function luckydraw_item_delete($luckydraw_item) {
+  entity_delete('luckydraw_item', entity_id('luckydraw_item', $luckydraw_item));
+}
+
+/**
+ * Load a bunch of luckydraw items with provided luckydraw id
+ */
+function lucydraw_items_load_by_luckydraw_id($lid) {}
+
+/**
+ * Delete a list of items with provided luckydraw id
+ */
+function luckydraw_items_delete_by_luckydraw_id($lid) {}
+
+
+function luckydraw_create($values = array()) {
+  return entity_get_controller('luckydraw')->create($values);
+}
+
+function luckydraw_page_view($luckydraw) {
+  return "Test";
+}
+
+/**
+ * Implements hook_theme()
+ */
+function luckydraw_theme() {
+  return array(
+    'luckydraw_add_list' => array(
+      'variables' => array('content' => array()),
+      'file' => 'includes/luckydraw.admin.inc',
+    ),
+  );
+}
+
+// /**
+//  * Implements hook_menu_local_tasks_alter().
+//  */
+// function luckydraw_menu_local_tasks_alter(&$data, $router_item, $root_path) {
+//   // Add action link 'admin/structure/models/add' on 'admin/structure/models'.
+//   if ($root_path == 'admin/content/luckydraws') {
+//     $item = menu_get_item('admin/content/lukcydraws/add');
+//     if ($item['access']) {
+//       $data['actions']['output'][] = array(
+//         '#theme' => 'menu_local_action',
+//         '#link' => $item,
+//       );
+//     }
+//   }
+// }
