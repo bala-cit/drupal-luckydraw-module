@@ -1,4 +1,4 @@
-name = Lucky Draw
+name = Lucky draw
 description = To provides kinds of lucky draws which are common
 version = 7.x-1.0-dev
 core = 7.x
@@ -9,3 +9,4 @@ dependencies[] = entity
 files[] = includes/luckydraw_type.admin.inc
 files[] = includes/luckydraw.admin.inc
 files[] = includes/luckydraw_item.admin.inc
+files[] = luckydraw.rules.inc

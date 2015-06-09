@@ -17,6 +17,6 @@ class LuckyDrawItemController extends EntityAPIControllerExportable {
       'uid' => $user->uid,
     );
 
-    parent::create($values);
+    return parent::create($values);
   }
 }

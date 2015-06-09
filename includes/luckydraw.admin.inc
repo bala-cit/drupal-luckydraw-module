@@ -92,7 +92,7 @@ class LuckyDrawUIController extends EntityDefaultUIController {
       'page arguments' => array(1),
       'access callback' => 'luckydraw_access',
       'access arguments' => array('view', 'luckydraw entities'),
-      'type' => MENU_CALLBACK,
+      'type' => MENU_NORMAL_ITEM,
     );
 
     return $items;
@@ -100,6 +100,12 @@ class LuckyDrawUIController extends EntityDefaultUIController {
 
   /**
    * Overrides overviewTableRow. Since we need to change the links.
+   *
+   * @param $conditions
+   * @param $id
+   * @param $entity
+   * @param array $additional_cols
+   * @return array
    */
   protected function overviewTableRow($conditions, $id, $entity, $additional_cols = array()) {
     $row = parent::overviewTableRow($conditions, $id, $entity, $additional_cols);
@@ -109,6 +115,11 @@ class LuckyDrawUIController extends EntityDefaultUIController {
 
   /**
    * Overrides table headers to add more links
+   *
+   * @param $conditions
+   * @param $rows
+   * @param array $additional_header
+   * @return array
    */
   protected function overviewTableHeaders($conditions, $rows, $additional_header = array()) {
     $headers = parent::overviewTableHeaders($conditions, $rows, $additional_header);
@@ -169,28 +180,51 @@ function luckydraw_edit_form($form, &$form_state, $luckydraw) {
     '#default_value' => isset($luckydraw->description) ? $luckydraw->description : '',
   );
 
-  $form['settings'] = array(
-    '#tree' => TRUE,
-    '#type' => 'fieldset',
-    '#title' => 'Settings',
-    '#collapsible' => TRUE,
+  $form['additional_settings'] = array(
+    '#type' => 'vertical_tabs',
   );
 
-  $form['settings']['display_title'] = array(
+  $form['display_settings'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Display settings'),
+    '#group' => 'additional_settings',
+  );
+
+  $form['display_settings']['settings']['#tree'] = TRUE;
+
+  $form['display_settings']['settings']['display_title'] = array(
     '#type' => 'textfield',
     '#title' => t('Display Title'),
     '#description' => t('Display this title of the lucky draw to users.'),
     '#default_value' => isset($luckydraw->settings['display_title']) ? $luckydraw->settings['display_title'] : '',
   );
 
-  $form['settings']['allow_replay'] = array(
+  $form['display_settings']['settings']['display_help_text'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Help text'),
+    '#description' => t('Display this help text on the lucky draw to users.'),
+    '#default_value' => isset($luckydraw->settings['display_help_text']) ? $luckydraw->settings['display_help_text'] : '',
+  );
+
+  //$form['additional_settings']['settings']['#tree'] = TRUE;
+
+  $form['other_settings'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Others'),
+    '#group' => 'additional_settings',
+    '#weight' => 50,
+  );
+
+  $form['other_settings']['settings']['#tree'] = TRUE;
+
+  $form['other_settings']['settings']['allow_replay'] = array(
     '#type' => 'checkbox',
     '#title' => t('Allow replay'),
     '#description' => t('When checked on, the user will be able to replay as many times as possible.'),
     '#default_value' => isset($luckydraw->settings['allow_replay']) ? $luckydraw->settings['allow_replay'] : 0,
   );
 
-  $form['settings']['create_block'] = array(
+  $form['other_settings']['settings']['create_block'] = array(
     '#type' => 'checkbox',
     '#title' => t('Create block'),
     '#description' => t('Create as a block so you can put it on a different page.'),
@@ -235,11 +269,15 @@ function luckydraw_edit_form_validate(&$form, &$form_state) {}
 function luckydraw_edit_form_submit(&$form, &$form_state) {
   $luckydraw = entity_ui_controller('luckydraw')->entityFormSubmitBuildEntity($form, $form_state);
 
+  $luckydraw->changed = REQUEST_TIME;
+
   $luckydraw->save();
   $form_state['redirect'] = 'admin/content/luckydraws';
 }
 
-function luckydraw_form_submit_delete(&$form, &$form_state) {}
+function luckydraw_form_submit_delete(&$form, &$form_state) {
+  $form_state['redirect'] = 'admin/content/luckydraws';
+}
 
 function theme_luckydraw_add_list(&$variables) {
   $content = $variables['content'];

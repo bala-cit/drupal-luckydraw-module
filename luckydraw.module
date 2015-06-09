@@ -1,13 +1,30 @@
 <?php
 /**
  * @file luckydraw.module
- * Lucky draw
+ *
+ * The core implementation of luckydraw, it provides configuration UI, hooks for other luckydraw module to interacts,
+ * define new type of luckydraw will be automatically loaded with given hooks / function naming rules.
+ *
+ * To implement the lucky draw feature, there are 3 entity types defined:
+ *  - Lucky draw type:
+ *    User can define more types of luckydraw, in this module we have implemented a wheel fortune, see luckydraw_wheel.
+ *    No specific purpose, cannot add new fields.
+ *  - Lucky draw:
+ *    The entity contains the lucky draw settings, including basic display settings, allow specific type of lucky
+ *    draw to extend the settings which saved in luckydraw's settings field as serialized value.
+ *  - Lucky draw item
+ *    The item in terms of each prize, the rate of hitting it when user play the lottery. It defines some basic fields,
+ *    other module may also alter the settings form to extend. Values are saved in a serialized field in data of
+ *    luckydraw_item table.
+ */
+
+/**
+ * Intends to keep the module file smaller, the Controllers are created in separate files
  */
 
 module_load_include('inc', 'luckydraw', 'includes/controllers/LuckyDrawController');
 module_load_include('inc', 'luckydraw', 'includes/controllers/LuckyDrawTypeController');
 module_load_include('inc', 'luckydraw', 'includes/controllers/LuckyDrawItemController');
-
 module_load_include('inc', 'luckydraw', 'includes/entities/LuckyDraw');
 module_load_include('inc', 'luckydraw', 'includes/entities/LuckyDrawType');
 module_load_include('inc', 'luckydraw', 'includes/entities/LuckyDrawItem');
@@ -23,27 +40,23 @@ function luckydraw_entity_info() {
     'entity class' => 'LuckyDrawItem',
     'controller class' => 'LuckyDrawItemController',
     'base table' => 'luckydraw_item',
-    'fieldable' => FALSE,
     'entity keys' => array(
       'id' => 'liid',
-    ),
-    'bundles' => array(),
-    'load hook' => 'luckydraw_item_load',
-    'view modes' => array(
-      'full' => array(
-        'label' => t('Default'),
-        'custom settings' => TRUE,
-      ),
+      'label' => 'name',
     ),
     'label callback' => 'entity_class_label',
     'uri callback' => 'entity_class_uri',
+    'fieldable' => TRUE,
+    'load hook' => 'luckydraw_item_load',
+    'admin ui' => array(
+      'path' => 'admin/content/luckydraws/manage',
+      'controller class' => 'LuckyDrawItemUIController',
+      'file' => 'includes/luckydraw_item.admin.inc',
+      'menu wildcard' => '%luckydraw_item',
+    ),
     'module' => 'luckydraw',
     'access callback' => 'luckydraw_access',
-    'admin ui' => array(
-      'path' => 'admin/content/luckydraws/manage/%luckydraw/items',
-      'file' => 'includes/luckydraw_item.admin.inc',
-      'controller class' => 'LuckyDrawItemUIController',
-    ),
+    'fieldable' => TRUE,
   );
 
   $entity['luckydraw'] = array(
@@ -58,7 +71,9 @@ function luckydraw_entity_info() {
     'bundle keys' => array(
       'bundle' => 'type',
     ),
+    //'bundle of' => 'luckydraw_item',
     'bundles' => array(),
+    'creation callback' => 'luckydraw_create',
     'load hook' => 'luckydraw_load',
     'view modes' => array(
       'full' => array(
@@ -123,13 +138,114 @@ function luckydraw_entity_info_alter(&$entity_info) {
 }
 
 /**
+ * Implements hook_entity_property_info().
+ * Provide metadata for entity properties, so they can be used in Rules data selector.
+ */
+function luckydraw_entity_property_info() {
+
+  $properties = &$info['luckydraw']['properties'];
+
+  $properties['lid'] = array(
+    'label' => t('Luckydraw ID'),
+    'description' => t('Serial numeric ID of the truncated luckydraw data in the local database.'),
+    'type' => 'integer',
+    'schema field' => 'lid',
+  );
+  $properties['name'] = array(
+    'label' => t('Name'),
+    'description' => t('The luckydraw name.'),
+    'type' => 'text',
+    'schema field' => 'name',
+  );
+  $properties['type'] = array(
+    'label' => t('Luckydraw type'),
+    'description' => t('The luckydraw type.'),
+    'type' => 'text',
+    'schema field' => 'type',
+  );
+  $properties['description'] = array(
+    'label' => t('Description'),
+    'description' => t('The luckydraw description.'),
+    'type' => 'text',
+    'schema field' => 'description',
+  );
+
+  // User entity.
+  $properties['user'] = array(
+    'label' => t('User'),
+    'description' => t("Owner's user account."),
+    'type' => 'user',
+    'schema field' => 'uid',
+  );
+
+  $properties['settings'] = array(
+    'label' => t('Settings'),
+    'description' => t('The luckydraw settings.'),
+    'type' => 'text',
+    'schema field' => 'settings',
+  );
+
+  $properties['created'] = array(
+    'label' => t('Created'),
+    'description' => t('The Unix timestamp when the card data was first stored.'),
+    'type' => 'date',
+    'schema field' => 'created',
+  );
+  $properties['changed'] = array(
+    'label' => t('Changed'),
+    'description' => t('The Unix timestamp when the card data was last updated.'),
+    'type' => 'date',
+    'schema field' => 'changed',
+  );
+
+  return $info;
+}
+
+function luckydraw_token_info() {
+  $types = array(
+    'luckydraw' => array(
+      'name' => t('Luckydraw entity'),
+      'description' => t('A single luckydraw entity'),
+      'needs-data' => 'luckydraw',
+    ),
+  );
+
+  $tokens['luckydraw']['lid'] = array(
+    'type' => 'integer',
+    'name' => t('Luckydraw entity identifier'),
+    'description' => t('Luckydraw entity identifier'),
+  );
+
+  return array(
+    'types' => $types,
+    'tokens' => $tokens,
+  );
+}
+
+/**
  * Implements hook_menu().
  * Add the menu items for luckydraw entity, most CRUD related.
  */
 function luckydraw_menu() {
   $items = array();
 
+  $items['luckydraw/process/js/%luckydraw'] = array(
+    'title' => 'Luckydraw Process',
+    'description' => 'Callback function to client to find the lucky prize.',
+    'page callback' => 'luckydraw_process_js_get_result',
+    'page arguments' => array(3),
+    'access callback' => 'luckydraw_access',
+    'access arguments' => array('view'),
+    'type' => MENU_CALLBACK,
+  );
+
   return $items;
+}
+
+function luckydraw_item_title_callback($op, $luckydraw, $luckydraw_item) {
+  if ($op == 'add') {
+    return t('Add %title item', array('%title' => $luckydraw->name));
+  }
 }
 
 /**
@@ -215,66 +331,139 @@ function luckydraw_type_delete($luckydraw_type) {
  */
 function luckydraw_load($lid, $reset = FALSE) {
   $luckydraw_entities = luckydraw_load_multiple(array($lid), array(), $reset);
-  $luckydraw = reset($luckydraw_entities);
-  return $luckydraw;
-  // Append the items
-  //$luckydraw->items = luckydraw_items_load($lid, $reset);
+  return reset($luckydraw_entities);
 }
 
 /**
  * Luckydraw loads multiple by calling entity_load.
+ *
+ * @param array $lids
+ * @param array $conditions
+ * @param bool $reset
+ * @return mixed
  */
 function luckydraw_load_multiple($lids = array(), $conditions = array(), $reset = FALSE) {
   return entity_load('luckydraw', $lids, $conditions, $reset);
 }
 
+/**
+ * Save luckydraw
+ * @param object $luckydraw
+ */
 function luckydraw_save($luckydraw) {
   entity_save('luckydraw', $luckydraw);
 }
 
+/**
+ * Delete luckydraw and its items
+ *
+ * @param object $luckydraw
+ */
 function luckydraw_delete($luckydraw) {
   entity_delete('luckydraw', entity_id('luckydraw', $luckydraw));
+  luckydraw_items_delete_by_luckydraw_id($luckydraw->id);
 }
 
 /* luckydraw_item CRUD using entity api */
 
 /**
  * Load a single luckydraw item
+ *
+ * @param $liid
+ *  Luckydraw item identifier
+ * @param bool $reset
+ * @return object
+ *  single luckydraw item
  */
 function luckydraw_item_load($liid, $reset = FALSE) {
   $items = luckydraw_item_load_multiple(array($liid), array(), $reset);
   return reset($items);
 }
 
+/**
+ * Load multiple luckydraw items
+ *
+ * @param array $liids
+ * @param array $conditions
+ * @param bool $reset
+ * @return mixed
+ */
 function luckydraw_item_load_multiple($liids = array(), $conditions = array(), $reset = FALSE) {
   return entity_load('luckydraw_item', $liids, $conditions, $reset);
 }
 
+/**
+ * Save a luckydraw item
+ *
+ * @param object $luckydraw_item
+ */
 function luckydraw_item_save($luckydraw_item) {
   entity_save('luckydraw_item', $luckydraw_item);
 }
 
+/**
+ * Delete a single luckydraw item
+ *
+ * @param object $luckydraw_item
+ */
 function luckydraw_item_delete($luckydraw_item) {
   entity_delete('luckydraw_item', entity_id('luckydraw_item', $luckydraw_item));
 }
 
 /**
- * Load a bunch of luckydraw items with provided luckydraw id
+ * Save a luckydraw item
+ *
+ * @param array $values
+ * @return object
+ *  Created luckydraw item
  */
-function lucydraw_items_load_by_luckydraw_id($lid) {}
+function luckydraw_item_create($values = array()) {
+  return entity_get_controller('luckydraw_item')->create($values);
+}
+
+/**
+ * Load a bunch of luckydraw items with provided luckydraw id
+ * @param $luckydraw
+ *  Luckydraw object
+ */
+function luckydraw_load_items($luckydraw) {
+  $luckydraw->items = array();
+
+  $result = db_select('luckydraw_item', 'i')
+    ->fields('i')
+    ->condition('i.lid', $luckydraw->lid)
+    ->execute();
+
+  while($item = $result->fetchAssoc()) {
+    $item['data'] = unserialize($item['data']);
+    $luckydraw->items[$item['liid']] = (object) $item;
+  }
+}
 
 /**
  * Delete a list of items with provided luckydraw id
+ * @param int $lid
+ *  Luckydraw identifier
  */
 function luckydraw_items_delete_by_luckydraw_id($lid) {}
 
-
+/**
+ * Save Luckydraw
+ * @param array $values
+ * @return object luckydraw
+ */
 function luckydraw_create($values = array()) {
   return entity_get_controller('luckydraw')->create($values);
 }
 
+/**
+ * View luckydraw
+ * @param object $luckydraw
+ * @return html
+ */
 function luckydraw_page_view($luckydraw) {
-  return "Test";
+  luckydraw_load_items($luckydraw);
+  return luckydraw_render($luckydraw);
 }
 
 /**
@@ -289,18 +478,71 @@ function luckydraw_theme() {
   );
 }
 
-// /**
-//  * Implements hook_menu_local_tasks_alter().
-//  */
-// function luckydraw_menu_local_tasks_alter(&$data, $router_item, $root_path) {
-//   // Add action link 'admin/structure/models/add' on 'admin/structure/models'.
-//   if ($root_path == 'admin/content/luckydraws') {
-//     $item = menu_get_item('admin/content/lukcydraws/add');
-//     if ($item['access']) {
-//       $data['actions']['output'][] = array(
-//         '#theme' => 'menu_local_action',
-//         '#link' => $item,
-//       );
-//     }
-//   }
-// }
+/**
+ * Render luckydraw in the end
+ * This function provides a HOOK_luckydraw_pre_render($luckydraw)
+ * to allow other module to define the theme.
+ * @param $luckydraw
+ *  Luckydraw object
+ * @return html output
+ */
+function luckydraw_render($luckydraw) {
+  // Provide a hook for other modules to alter the render
+  $render = module_invoke_all('luckydraw_pre_render', $luckydraw);
+
+  if (isset($render['theme'])) {
+    return theme($render['theme'], $render['variables']);
+  }
+  else {
+    return $render;
+  }
+}
+
+/**
+ * Shuffle and pick the prize items.
+ * This function firstly fill up an empty array with the prize item's ID with its "Rate" size,
+ * and shuffle function to mess up the items, then call array_rand to pick one item from the total.
+ *
+ * @param $items_config
+ *  The items configurations originally set, which are not only including prize, but also settings of each prize
+ * @return array
+ *  A list of shuffled items data
+ */
+function luckydraw_shuffle_rand($items_config) {
+  $items = array();
+  $start_index = 0;
+  foreach ($items_config as $item) {
+    $items = array_merge($items, array_fill($start_index, $item->data['rate'], $item->liid));
+    $start_index += $item->data['rate'];
+  }
+
+  // Shuffle the items
+  shuffle($items);
+
+  return $items[array_rand($items)];
+}
+
+/**
+ * Luckydraw play to get the result
+ *
+ * @param object $luckydraw
+ * @return json
+ *   Json formatted result
+ */
+function luckydraw_process_js_get_result($luckydraw) {
+  global $user;
+
+  luckydraw_load_items($luckydraw);
+  $result = luckydraw_shuffle_rand($luckydraw->items);
+
+  // If rules module enabled
+  if (module_exists('rules')) {
+    $rules_event_name = isset($luckydraw->items[$result]->lose) ?
+      'luckydraw_user_drawn_no_prize' : 'luckydraw_user_won_a_prize';
+
+    rules_invoke_event($rules_event_name, $user, $luckydraw, $result);
+  }
+
+  drupal_json_output(array('result' => $luckydraw->items[$result], 'status' => 'ok'));
+  exit;
+}

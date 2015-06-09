@@ -177,5 +177,49 @@ function luckydraw_schema() {
     ),
   );
 
+  $schema['luckydraw_results'] = array(
+    'description' => 'Store the luckydraw player and results',
+    'fields' => array(
+      'uid' => array(
+        'description' => 'The user identifer of the owner of the item',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'lid' => array(
+        'description' => 'The luckydraw entity id',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'liid' => array(
+        'description' => 'The luckydraw item id',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'result' => array(
+        'description' => 'An explanation of how user played and gained',
+        'type' => 'text',
+        ''
+      ),
+      'created' => array(
+        'description' => 'Timestamp value of when the item is created',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'indexes' => array(
+      'uid' => array('uid'),
+      'lid' => array('lid'),
+      'uid_lid' => array('uid', 'lid'),
+    ),
+  );
+
   return $schema;
 }
