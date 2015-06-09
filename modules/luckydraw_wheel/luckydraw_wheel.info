@@ -1,5 +1,7 @@
-name = Lucky Draw Wheel Fortune
+name = Lucky draw - Wheel Fortune
 description = A wheel fortune luckydraw type
 version = 7.x-1.0-dev
 core = 7.x
 package = "Lucky draw"
+
+dependencies[] = "luckydraw"

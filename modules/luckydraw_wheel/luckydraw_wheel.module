@@ -13,6 +13,145 @@ function luckydraw_wheel_luckydraw_info() {
   );
 }
 
-function luckydraw_wheel_luckydraw_draw() {
+/**
+ * Implements luckydraw_TYPE_luckydraw_item_fields_form callback
+ * @see
+ *    luckydraw/includes/luckydraw_item.admin.inc:luckydraw_item_form()
+ */
+function luckydraw_wheel_luckydraw_item_fields_form($default_values = array()) {
+  $form['angle'] = array(
+    '#tree' => TRUE,
+    '#title' => t('Angle'),
+    '#type' => 'fieldset',
+    '#description' => t('Set a angle range for the sector. Leave blank which means the sectors are divided by the number of sectors.'),
+  );
+  $form['angle']['min'] = array(
+    '#type' => 'textfield',
+    '#default_value' => isset($default_values['angle']['min']) ? $default_values['angle']['min']: '',
+    '#title' => t('Angle min'),
+    '#description' => t('The sector angle starts.'),
+    '#size' => 10,
+    '#maxlength' => 10,
+  );
+  $form['angle']['max'] = array(
+    '#type' => 'textfield',
+    '#default_value' => isset($default_values['angle']['max']) ? $default_values['angle']['max'] : '',
+    '#title' => t('Angle max'),
+    '#description' => t('The sector angle ends.'),
+    '#size' => 10,
+    '#maxlength' => 10,
+  );
 
+  return $form;
+}
+
+function luckydraw_wheel_form_alter(&$form, &$form_state, $form_id) {
+
+  if ($form_id == 'luckydraw_edit_form' &&
+    isset($form_state['luckydraw']) &&
+    $form_state['luckydraw']->type == 'wheel') {
+
+    $form['wheel_settings'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Wheel Fortune'),
+      '#description' => t('Choose how the wheel will be created.'),
+      '#group' => 'additional_settings',
+    );
+
+    $form['wheel_settings']['settings']['#tree'] = TRUE;
+
+    $form['wheel_settings']['settings']['html5_canvas'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Draw the wheel using HTML5 canvas'),
+      '#default_value' => isset($form_state['luckydraw']->settings['html5_canvas']) ? $form_state['luckydraw']->settings['html5_canvas'] : 1,
+      '#prefix' => '<p></p>',
+      '#description' => t('Choose to create the wheel using html5 canvas, or below option to upload the wheel'),
+      '#suffix' => t('OR upload the wheel, needle and start button'),
+    );
+
+    $form['wheel_settings']['settings']['upload'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Upload'),
+      '#collapsible' => TRUE,
+      '#collapsed' => TRUE,
+      '#description' => t('Upload wheel, needle and start button'),
+    );
+    $form['wheel_settings']['settings']['upload']['needle'] = array(
+      '#type' => 'managed_file',
+      '#title' => t('Needle'),
+      '#theme' => '',
+      '#upload_location' => 'public://images/luckydraw/',
+      '#default_value' => isset($form_state['luckydraw']->settings['upload']['needle']) ?
+        $form_state['luckydraw']->settings['upload']['needle'] : '',
+    );
+
+    $form['wheel_settings']['settings']['upload']['wheel'] = array(
+      '#type' => 'managed_file',
+      '#title' => t('Wheel'),
+      '#upload_location' => 'public://images/luckydraw/',
+      '#default_value' => isset($form_state['luckydraw']->settings['upload']['wheel']) ?
+        $form_state['luckydraw']->settings['upload']['wheel'] : '',
+    );
+  }
+}
+
+/**
+ * Implements hook_luckydraw_pre_render().
+ * Prepare the luckydraw wheel
+ */
+function luckydraw_wheel_luckydraw_pre_render($luckydraw) {
+  // Add libraries required
+  $module_path = drupal_get_path('module', 'luckydraw_wheel');
+
+  drupal_add_js($module_path . '/js/jQueryRotate.2.2.js', 'file');
+  drupal_add_js($module_path . '/js/jquery.tinysort.js', 'file');
+  drupal_add_js($module_path . '/js/jquery.easing.min.js', 'file');
+
+  // Draw the wheel using html5 canvas
+  if (isset($luckydraw->settings['html5_canvas'])
+    && $luckydraw->settings['html5_canvas']) {
+
+    drupal_add_js($module_path . '/js/luckydraw_wheel.html5canvas.js', 'file');
+    drupal_add_css($module_path . '/css/reset.css');
+
+    return array(
+      'theme' => 'luckydraw_wheel_html5_canvas',
+      'variables' => array(
+        'luckydraw' => $luckydraw,
+      ),
+    );
+  }
+  else {
+
+    drupal_add_js($module_path . '/js/luckydraw_wheel.custom-upload.js', 'file');
+
+    $needle = file_load($luckydraw->settings['upload']['needle']);
+    $luckydraw->settings['upload']['needle'] = file_create_url($needle->uri);
+
+    $wheel = file_load($luckydraw->settings['upload']['wheel']);
+    $luckydraw->settings['upload']['wheel'] = file_create_url($wheel->uri);
+
+    return array(
+      'theme' => 'luckydraw_wheel_custom_upload',
+      'variables' => array(
+        'luckydraw' => $luckydraw,
+      ),
+    );
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function luckydraw_wheel_theme() {
+  return array(
+    'luckydraw_wheel_html5_canvas' => array(
+      'variables' => array('luckydraw' => NULL),
+      'template' => 'templates/luckydraw_wheel_html5_canvas',
+    ),
+    'luckydraw_wheel_custom_upload' => array(
+      'variables' => array('luckydraw' => NULL),
+      'template' => 'templates/luckydraw_wheel_custom_upload',
+    ),
+  );
 }
