@@ -1,0 +1,213 @@
+<?php
+/**
+ * @file luckydraw_commerce.module
+ *  The basic implementation to integrates with commerce module for a single luckydraw item.
+ * You might use this module and when user has drawn a prize of product, which will be directly
+ * added to user's cart without costing the consumer any points or money.
+ */
+
+function luckydraw_commerce_menu() {
+  $items['luckydraw_commerce/commerce_product/autocomplete'] = array(
+    'title' => 'commerce_product autocomplete',
+    'page callback' => 'luckydraw_commerce_commerce_product_autocomplete',
+    'access arguments' => array('view any commerce_product entity'),
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_form_alter().
+ * To add SKU field to luckydraw item configuration page
+ *
+ * @param $form
+ * @param $form_state
+ * @param $form_id
+ */
+function luckydraw_commerce_form_alter(&$form, &$form_state, $form_id) {
+
+  // Add userpoints settings to luckydraw item
+  if ($form_id == 'luckydraw_item_form') {
+    $form['commerce'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Commerce'),
+      '#group' => 'additional_settings',
+    );
+
+    $form['commerce']['data']['#tree'] = TRUE;
+    $form['commerce']['data']['commerce_product_sku'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Specify the Product with this'),
+      '#description' => t('Input the Product Name or SKU and select from the auto completed item.'),
+      '#default_value' => isset($form_state['luckydraw_item']->data['commerce_product_sku']) ?
+        $form_state['luckydraw_item']->data['commerce_product_sku'] : '',
+      '#autocomplete_path' => 'luckydraw_commerce/commerce_product/autocomplete',
+    );
+
+    $form['generic']['data']['message']['#title'] .=
+      ' ' . t('(If commerce product sku filled, a "Add to Cart" button will be added)');
+  }
+}
+
+/**
+ * Autocomplete to get product sku / name
+ *
+ * @param $string
+ */
+function luckydraw_commerce_commerce_product_autocomplete($string) {
+  $query = db_select('commerce_product', 'cp');
+
+  $product_sku_alias = $query->addField('cp', 'sku');
+  $product_title_alias = $query->addField('cp', 'title');
+  $product_type_alias = $query->addField('cp', 'type');
+
+  if ($string !== '') {
+    $args = array();
+
+    $where = '(cp.sku LIKE :sku_match OR cp.title LIKE :title_match)';
+    $args['sku_match'] = '%' . $string . '%';
+    $args['title_match'] = '%' . $string . '%';
+
+    $query->where($where, $args);
+  }
+
+  // Order the results by SKU, title, and then product type.
+  $query
+    ->orderBy($product_sku_alias)
+    ->orderBy($product_title_alias)
+    ->orderBy($product_type_alias);
+
+  // Execute the query and build the results array.
+  $result = $query->execute();
+
+  $matches = array();
+
+  foreach ($result->fetchAll() as $product) {
+    $matches[$product->product_id] = array(
+      'sku' => $product->sku,
+      'type' => $product->type,
+      'title' => $product->title,
+      'rendered' => t('@sku: @title', array('@sku' => $product->sku, '@title' => $product->title)),
+    );
+  }
+
+  foreach ($matches as $product_id => $data) {
+    $matches[$data['sku']] = $data['rendered'];
+  }
+
+  drupal_json_output($matches);
+}
+
+/**
+ * Build commerce add to cart form and attach to luckydraw response for js to render
+ *
+ * @param $variables
+ * @param $luckdraw
+ * @param $account
+ * @param $luckydraw_item_id
+ */
+function luckydraw_commerce_luckydraw_process_delivery_alter(&$variables, $luckydraw, $account, $luckydraw_item_id) {
+
+  $luckydraw_item = $variables['result'];
+
+  // If the item has Commerce Product configured,
+  // we will change the response message by appending a form button to
+  // let user add the product to the cart
+  if (isset($luckydraw_item->data['commerce_product_sku'])
+  && !empty($luckydraw_item->data['commerce_product_sku'])
+  && $product = commerce_product_load_by_sku($luckydraw_item->data['commerce_product_sku'])) {
+
+    // Context
+    // $data = array('context' => array('display_path' => 'luckydraw-commerce/reward'));
+    $data = array();
+    $line_item = commerce_product_line_item_new($product, 1, 0, $data, 'product');
+    $line_item->data['context']['product_ids'] = array($product->product_id);
+    $line_item->data['context']['add_to_cart_combine'] = FALSE;
+
+    $luckydraw_item->data['message']['value'] .=
+      luckydraw_commerce_commerce_cart_add_to_cart_form($product);
+
+    //  drupal_render(drupal_get_form('commerce_cart_add_to_cart_form', $line_item));
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter
+ *
+ * @param $form
+ * @param $form_state
+ */
+function luckydraw_commerce_form_commerce_cart_add_to_cart_form_alter(&$form, &$form_state) {
+
+  $for_luckydraw = FALSE;
+
+  foreach ($form_state['build_info']['args'] as $a) {
+    if (is_string($a) && $a == 'for_luckydraw') {
+      $for_luckydraw = TRUE;
+      break;
+    }
+  }
+
+  // Change add to cart button name
+  if ($for_luckydraw) {
+    $form_state['for_luckydraw'] = TRUE;
+    $form['submit']['#title'] = $form['submit']['#value'] = $form['submit']['#attributes']['value'] = t('Get the prize');
+  }
+}
+
+/**
+ * Add to cart commerce form a arg "for_luckydraw" to distinguish it from normal add to cart form
+ *
+ * @param $product
+ * @return array|mixed
+ */
+function luckydraw_commerce_commerce_cart_add_to_cart_form($product) {
+  $data = array();
+  $line_item = commerce_product_line_item_new($product, 1, 0, $data, 'product');
+  $line_item->data['context']['product_ids'] = array($product->product_id);
+  $line_item->data['context']['add_to_cart_combine'] = FALSE;
+
+  $form = drupal_get_form('commerce_cart_add_to_cart_form', $line_item, FALSE, array(), 'for_luckydraw');
+
+  return drupal_render($form);
+}
+
+
+/**
+ * Add the product to the cart programatically
+ *
+ * @param $account
+ * @param $product_id
+ */
+function luckydraw_commerce_add_product_to_cart($account, $product_id) {
+  $form_state = array();
+
+  $form_state['values']['quantity'] = 1; // Will always be 1 quantity of product
+  $form_state['values']['product_id'] = $product_id;
+  $form_state['values']['uid'] = $account->uid;
+
+  // TODO: complete the fields
+  $form_state['values']['line_item_fields'] = array();
+  $form_state['line_item'];
+
+  drupal_form_submit('commerce_cart_add_to_cart_form', $form_state);
+}
+
+/**
+ * Implements hook_luckydraw_save_transaction().
+ *
+ * @param $luckydraw
+ * @param $account
+ * @param $luckydraw_item_id
+ */
+function luckydraw_commerce_luckydraw_save_transaction($luckydraw, $account, $luckydraw_item_id) {
+  return;
+  if (isset($luckydraw->items[$luckydraw_item_id]->data['commerce_product_sku'])) {
+
+    luckydraw_commerce_add_product_to_cart(
+      $account,
+      $luckydraw->items[$luckydraw_item_id]->data['commerce_product_sku']
+    );
+  }
+}

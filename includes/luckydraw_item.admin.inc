@@ -49,7 +49,7 @@ class LuckyDrawItemUIController extends EntityDefaultUIController {
     $items[$path . '/' . $wildcard . '/delete'] = array(
       'title' => 'Delete a luckydraw item',
       'page callback' => 'luckydraw_item_delete_wrapper',
-      'page arguments' => array(),
+      'page arguments' => array($id_count + 2),
       'access callback' => 'luckydraw_access',
       'access arguments' => array('edit'),
       'file' => 'includes/luckydraw_item.admin.inc',
@@ -59,12 +59,31 @@ class LuckyDrawItemUIController extends EntityDefaultUIController {
     $items['luckydraw-item/' . $wildcard] = array(
       'title' => 'View a luckydraw item',
       'page callback' => 'luckydraw_item_view_page',
-      'page arguments' => array(),
+      'page arguments' => array(1),
       'access callback' => 'luckydraw_access',
       'access arguments' => array('view'),
+      'file' => 'includes/luckydraw_item.admin.inc',
+      'file path' => drupal_get_path('module', $this->entityInfo['module']),
     );
 
     return $items;
+  }
+
+  /**
+   * Override overvewTable to append luckydraw item parent id to filter the items only belows to the parent
+   *
+   * @param array $conditions
+   * @return Array
+   */
+  public function overviewTable($conditions = array()) {
+
+    $url_comp = explode('/', request_uri());
+
+    $conditions += array(
+      'lid' => $url_comp[5] // The luckydraw entity identifier from url component
+    );
+
+    return parent::overviewTable($conditions);
   }
 
   protected function overviewTableRow($conditions, $id, $entity, $additional_cols = array()) {
@@ -82,7 +101,7 @@ class LuckyDrawItemUIController extends EntityDefaultUIController {
 
     $additional_cols += array(
       $entity->data['rate'] . ' %',
-      $entity->data['weight']
+      $entity->weight
     );
 
     // Add in any passed additional cols.
@@ -164,9 +183,19 @@ function luckydraw_item_form($form, &$form_state, $luckydraw, $luckydraw_item = 
     '#default_value' => isset($luckydraw_item->name) ? $luckydraw_item->name : '',
   );
 
-  // Item specific settings
-  $form['data']['#tree'] = TRUE;
-  $form['data']['rate'] = array(
+  $form['additional_settings'] = array(
+    '#type' => 'vertical_tabs',
+  );
+
+  $form['generic'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Generic'),
+    '#group' => 'additional_settings',
+  );
+
+  $form['generic']['data']['#tree'] = TRUE;
+
+  $form['generic']['data']['rate'] = array(
     '#type' => 'textfield',
     '#default_value' => isset($luckydraw_item->data['rate']) ? $luckydraw_item->data['rate'] : '',
     '#title' => t('Rate'),
@@ -177,6 +206,26 @@ function luckydraw_item_form($form, &$form_state, $luckydraw, $luckydraw_item = 
     '#required' => TRUE,
   );
 
+  $form['generic']['weight'] = array(
+    '#type' => 'select',
+    '#title' => t('Weight'),
+    '#options' => drupal_map_assoc(range(-50, 50)),
+    '#default_value' => isset($luckydraw_item->weight) ? $luckydraw_item->weight : 0,
+  );
+
+  $form['generic']['data']['lose'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Has drawn nothing'),
+    '#description' => t('Checked by stating the item is losing / draw nothing, sorry to the player.'),
+    '#default_value' => isset($luckydraw_item->data['lose']) ? $luckydraw_item->data['lose'] : 0,
+  );
+
+  $form['generic']['data']['message'] = array(
+    '#type' => 'text_format',
+    '#title' => t('Message to display'),
+    '#default_value' => isset($luckydraw_item->data['message']['value']) ? $luckydraw_item->data['message']['value'] : '',
+  );
+
   // Load the luckydraw type specific fields form
   // The specific module should define the fields with a function in TYPE.module
   // luckydraw_TYPE_luckydraw_item_fields_form
@@ -185,14 +234,7 @@ function luckydraw_item_form($form, &$form_state, $luckydraw, $luckydraw_item = 
     isset($luckydraw_item->data) ? $luckydraw_item->data : array()
   );
 
-  $form['data'] += $additional_fields;
-
-  $form['data']['weight'] = array(
-    '#type' => 'select',
-    '#title' => t('Weight'),
-    '#options' => drupal_map_assoc(range(-50, 50)),
-    '#default_value' => isset($luckydraw_item->data['weight']) ? $luckydraw_item->data['weight'] : 0,
-  );
+  $form['generic']['data'] += $additional_fields;
 
   $form_state['luckydraw'] = $luckydraw;
   $form_state['luckydraw_item'] = $luckydraw_item;
@@ -214,6 +256,10 @@ function luckydraw_item_edit_form_validate(&$form, &$form_state) {
 
 }
 
+/**
+ * @param $form
+ * @param $form_state
+ */
 function luckydraw_item_edit_form_submit(&$form, &$form_state) {
   global $user;
 
@@ -226,4 +272,54 @@ function luckydraw_item_edit_form_submit(&$form, &$form_state) {
   $luckydraw_item->save();
 
   $form_state['redirect'] = 'admin/content/luckydraws/manage/' . $form_state['luckydraw']->lid . '/items';
+}
+
+/**
+ * @param $luckydraw_item
+ */
+function luckydraw_item_delete_wrapper($luckydraw_item) {
+  return drupal_get_form('luckydraw_item_delete_confirm', $luckydraw_item);
+}
+
+/**
+ * @param $form
+ * @param $form_state
+ * @param $luckydraw_item
+ * @return mixed
+ */
+function luckydraw_item_delete_confirm($form, &$form_state, $luckydraw_item) {
+
+  $form['markup']['#markup'] =
+    t('Are you sure you want to delete the luckydraw item !name?
+    This action cannot be undo and the items could also linked to users who won the prize,
+    after deleted, the history of this will be lost!', array('!name' => $luckydraw_item->name));
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Confirm to delete'),
+    '#prefix' => '<p>',
+    '#suffix' => '<a href="/admin/content/luckydraws/manage/' . $luckydraw_item->lid . '/items">' . t('Cancel') . '</a></p>',
+  );
+
+  $form_state['luckydraw_item'] = $luckydraw_item;
+
+  return $form;
+}
+
+/**
+ * Delete confirmation
+ *
+ * @param $form
+ * @param $form_state
+ */
+function luckydraw_item_delete_confirm_submit($form, &$form_state) {
+  luckydraw_item_delete($form_state['luckydraw_item']);
+  drupal_set_message(t('!name is being deleted.', array('!name' => $form_state['luckydraw_item']->name)));
+}
+
+/**
+ * @param $luckydraw_item
+ */
+function luckydraw_item_view_page($luckydraw_item) {
+  drupal_goto('admin/content/luckydraws/manage/' . $luckydraw_item->lid . '/items/' . $luckydraw_item->liid . '/edit');
 }

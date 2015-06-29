@@ -1,0 +1,162 @@
+<?php
+/**
+ * @file
+ *  Luckydraw integration with userpoints module
+ */
+
+/**
+ * Implements hook_form_alter().
+ * Alter luckydraw_edit_form to add userpoints related configurations
+ *
+ * @param $form
+ * @param $form_state
+ * @param $form_id
+ */
+function luckydraw_userpoints_form_alter(&$form, &$form_state, $form_id) {
+
+  // Add userpoints settings to luckydraw entity
+  if ($form_id == 'luckydraw_edit_form') {
+
+    $form['userpoints_settings'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Userpoints'),
+      '#description' => t('Integrates with userpoints module.'),
+      '#group' => 'additional_settings',
+      '#weight' => 3, // put it lower
+    );
+
+    $form['userpoints_settings']['settings']['#tree'] = TRUE;
+
+    $form['userpoints_settings']['settings']['points_to_play'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Require points to play'),
+      '#description' => t('How many points will be reduced from current userpoints.
+        When value is non-zero, anonymous user won\'t be able to play.'),
+      '#default_value' => isset($form_state['luckydraw']->settings['points_to_play']) ?
+        $form_state['luckydraw']->settings['points_to_play'] : 0,
+      '#size' => 10,
+    );
+  } elseif ($form_id == 'luckydraw_item_form') {
+    $form['userpoints'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Userpoints'),
+      '#group' => 'additional_settings',
+    );
+
+    $form['userpoints']['data']['#tree'] = TRUE;
+
+    $form['userpoints']['data']['points'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Return points to user'),
+      '#description' => t('How many points will be returned to user.'),
+      '#default_value' => isset($form_state['luckydraw_item']->data['points']) ?
+        $form_state['luckydraw_item']->data['points'] : '',
+      '#size' => 10,
+    );
+  }
+
+  // Add userpoints specification to luckydraw item
+}
+
+/**
+ * Add user points to the response
+ *
+ * @param $luckydraw
+ * @return array
+ */
+function luckydraw_userpoints_luckydraw_pre_render($luckydraw) {
+  global $user;
+  $total_points = userpoints_get_current_points($user->uid, 'all');
+  $points_to_play = (int) $luckydraw->settings['points_to_play'];
+
+  if ($points_to_play > 0) {
+    $times_can_play = round($total_points / $points_to_play);
+    $variables['header']['playtimes'] = $times_can_play <= 0 ? t('You don\'t have enough points to play.') :
+          t('You can play the game <span>@times</span> times.', array('@times' => $times_can_play));
+  }
+
+  $variables['header']['userpoints'] = t('You have <span>@points</span> points', array('@points' => $total_points));
+
+  return array('variables' => $variables);
+}
+
+/**
+ * Implements hook_luckydraw_save_transaction().
+ *
+ * @param $luckydraw
+ * @param $account
+ * @param $luckydraw_item_id
+ */
+function luckydraw_userpoints_luckydraw_save_transaction($luckydraw, $account, $luckydraw_item_id) {
+  if (isset($luckydraw->settings['points_to_play']) && !empty($luckydraw->settings['points_to_play'])) {
+    $term = taxonomy_get_term_by_name('Luckydraw', 'userpoints');
+    $term = reset($term);
+
+    userpoints_userpointsapi(array(
+      'uid' => $account->uid,
+      'points' => 0 - $luckydraw->settings['points_to_play'],
+      'description' => t('Cost @points points to play lucky draw @name.', array(
+          '@points' => $luckydraw->settings['points_to_play'],
+          '@name' => $luckydraw->name,
+        )
+      ),
+      'tid' => $term ? $term->tid : NULL,
+    ));
+
+    if (isset($luckydraw->items[$luckydraw_item_id]->data['points'])
+      && (int) $luckydraw->items[$luckydraw_item_id]->data['points'] > 0) {
+
+      userpoints_userpointsapi(array(
+        'uid' => $account->uid,
+        'points' => $luckydraw->items[$luckydraw_item_id]->data['points'],
+        'description' => t('Gain @points points on wining @prize of lucky draw @name.', array(
+            '@points' => $luckydraw->items[$luckydraw_item_id]->data['points'],
+            '@name' => $luckydraw->name,
+            '@prize' => $luckydraw->items[$luckydraw_item_id]->name,
+          )
+        ),
+        'tid' => $term ? $term->tid : NULL,
+      ));
+    }
+  }
+}
+
+/**
+ * Check whether or not the user has enough points to play
+ *
+ * @param $luckydraw
+ * @param $account
+ * @return boolean or nothing when error occurred
+ *  if validation is fine, return TRUE, otherwise, directly sent the message to client
+ */
+function luckydraw_userpoints_luckydraw_process_validate($luckydraw, $account) {
+  $userpoints_total = userpoints_get_current_points($account->uid, 'all');
+
+  if ($userpoints_total - $luckydraw->settings['points_to_play'] >= 0) {
+    return TRUE;
+  }
+
+  luckydraw_set_error(t('Sorry, you don\'t have enough points to play.'));
+}
+
+/**
+ * Implements hook_luckydraw_process_delivery_alter().
+ * To add the updated userpoints to response
+ *
+ * @param $variables
+ * @param $luckydraw
+ * @param $account
+ * @param $luckydraw_item_id
+ */
+function luckydraw_userpoints_luckydraw_process_delivery_alter(&$variables, $luckydraw, $account, $luckydraw_item_id) {
+  global $user;
+
+  $total = userpoints_get_current_points($user->uid, 'all');
+  $cost = (int) $luckydraw->settings['points_to_play'];
+  $variables['result']->userpoints = array(
+    'total_points' => $total,
+    'playtimes' => $cost > 0 ? round($total / $cost) : NULL,
+  );
+
+  return TRUE;
+}
