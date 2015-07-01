@@ -1,0 +1,10 @@
+name = Lucky draw userpoints integration
+description = Integrates lucky draw with userpoints module
+version = 7.x-1.0-dev
+core = 7.x
+package = "Lucky draw"
+
+files[] = luckydraw_userpoints.rules.inc
+
+dependencies[] = "userpoints"
+dependencies[] = "luckydraw"

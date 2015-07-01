@@ -1,0 +1,25 @@
+.luckydraw-board {
+    position: relative;
+    left: 0;
+    top: 0;
+}
+
+.luckydraw-board .needle {
+    z-index: 500;
+    position: relative;
+    top: -12px;
+    display: inline;
+    left: 164px;
+}
+
+.luckydraw-board .wheel {
+    position: absolute;
+    top: 15px;
+}
+
+.luckydraw-board .start-btn {
+    z-index: 1000;
+    position: absolute;
+    left: 154px;
+    top: 170px;
+}

@@ -1,0 +1,44 @@
+<?php
+/**
+ * @file luckydraw_userpoints.install
+ *
+ */
+
+/**
+ * Implements hook_install().
+ */
+function luckydraw_userpoints_install() {
+  _luckydraw_userpoints_add_term();
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function luckydraw_userpoints_uninstall() {
+  _luckydraw_userpoints_delete_term();
+}
+
+/**
+ * Add a Luckydraw term to Userpoints vocabulary
+ */
+function _luckydraw_userpoints_add_term() {
+  $term = new stdClass();
+
+  $v = taxonomy_vocabulary_machine_name_load('userpoints');
+
+  $term->name = 'Luckydraw';
+  $term->vid = $v->vid;
+  taxonomy_term_save($term);
+}
+
+/**
+ * Delete Luckydraw term from Userpoints vocabulary
+ */
+function _luckydraw_userpoints_delete_term() {
+  $term = taxonomy_get_term_by_name('Luckydraw', 'userpoints');
+
+  if (!empty($term)) {
+    $term = reset($term);
+    taxonomy_term_delete($term->tid);
+  }
+}

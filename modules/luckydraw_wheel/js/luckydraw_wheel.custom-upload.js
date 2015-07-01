@@ -2,49 +2,60 @@
 Drupal.luckydraw_wheel = Drupal.luckydraw_wheel || {};
 
 (function($) {
-    $(document).ready(function() {
 
-        $('#needle-startbtn').click(function(e) {
-            // console.log($(this).attr('data-id'));
-            Drupal.luckydraw_wheel.luckydraw($(this).attr('data-id'));
-        });
+    Drupal.behaviors.LuckyDrawWheel = {
+        attach: function (context, settings) {
 
-    });
+            var wheel = {
 
-    Drupal.luckydraw_wheel.luckydraw = function(luckydraw_id) {
-        // console.log(luckydraw_id);
-        $.ajax({
-            type: 'GET',
-            url: '/luckydraw/process/js/' + luckydraw_id,
-            dataType: 'json',
-            cache: false,
-            error: function() {
-                alert(Drupal.t('An error has occurred! Please try again later.'));
-                return false;
-            },
-            success: function(resp) {
-                console.log(resp);
-                $("#needle-startbtn").unbind('click').css("cursor", "default");
+                duration : 6000,
 
-                // Generate a number between the angle range min - max
-                var a = Math.round(Math.random() * (resp.result.data.angle.max - resp.result.data.angle.min) + resp.result.data.angle.min);
-                var p = resp.result.name;
+                angle : 0,
 
-                $("#wheel-rotate").rotate({
-                    duration: 3000,
-                    angle: 0,
-                    animateTo: 1800+a,
-                    easing: $.easing.easeOutSine,
-                    callback: function() {
-                        var confirmed = confirm(Drupal.t("Configuration, you've drawn" + p + "! Try again?"));
-                        if (confirmed) {
-                            Drupal.luckydraw_wheel.luckydraw(luckydraw_id);
-                        } else {
-                            return false;
+                additionalAngle : 360 * parseInt(settings.luckydraw_wheel.additionalCycle),
+
+                spin : function(luckydraw_id) {
+                    //console.log(luckydraw_id);
+                    Drupal.luckydraw.go(luckydraw_id, function (response) {
+                        var angleMin = parseInt(response.result.data.angle.min);
+                        var angleMax = parseInt(response.result.data.angle.max);
+
+                        if (response.status != 'ok') {
+                            Drupal.luckydraw.message(response);
+                            return;
                         }
-                    }
-                });
+
+                        // Generate a number between the angle range min - max
+                        var angle = Math.floor(Math.random() * (angleMax - angleMin)) + angleMin;
+
+                        wheel.rotate(angle, response);
+                    });
+                },
+
+                rotate : function(angle, result) {
+                    $('#wheel-rotate', context).rotate({
+                        duration: wheel.duration,
+                        angle: wheel.angle,
+                        animateTo: wheel.additionalAngle + angle,
+                        easing: $.easing.easeOutSine,
+                        callback: function () {
+                            // Call luckydraw core module's message function
+                            // and show the result
+                            Drupal.luckydraw.message(result);
+                        }
+                    });
+                },
+
+                init : function() {
+                    $('#startbtn', context).bind('click', function() {
+                        wheel.spin($(this).attr('data-id'));
+                    });
+                }
+            };
+
+            window.onload = function() {
+                wheel.init();
             }
-        });
+        }
     }
 }(jQuery));

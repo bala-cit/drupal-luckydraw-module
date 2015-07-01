@@ -6,8 +6,11 @@
  */
 
 ?>
-<div class="title"><?php print $luckydraw->settings['display_title']; ?></div>
-<div class="help-text"><?php print $luckydraw->settings['display_help_text']; ?></div>
+<div class="luckydraw-title"><?php print $luckydraw->settings['display_title']; ?></div>
+<div class="luckydraw-help-text"><?php print $luckydraw->settings['display_help_text']; ?></div>
+<?php if (isset($luckydraw->settings['header'])): ?>
+  <div class="luckydraw-header"><?php print $luckydraw->settings['header']; ?></div>
+<?php endif; ?>
 <div id="venues" style="float: left; display:none">
   <ul>
     <?php foreach ($luckydraw->items as $delta => $item) : ?>
@@ -25,7 +28,10 @@
   </ul>
 </div>
 <div id="wheel">
-<canvas id="canvas" width="1000" height="600"></canvas>
+<canvas id="canvas"
+        width="<?php print $luckydraw->settings['html5_canvas']['width'] ?>"
+        height="<?php print $luckydraw->settings['html5_canvas']['height'] ?>">
+</canvas>
 </div>
 <div id="stats">
 </div>

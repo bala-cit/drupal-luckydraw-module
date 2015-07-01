@@ -65,6 +65,13 @@ function luckydraw_schema() {
         'serialize' => TRUE,
         'not null' => FALSE,
       ),
+      'status' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0x01,
+        'size' => 'tiny',
+        'description' => 'The availability status of the entity.',
+      ),
     ),
     'primary key' => array('lid'),
     'indexes' => array(
@@ -141,43 +148,7 @@ function luckydraw_schema() {
     'primary key' => array('liid'),
   );
 
-  $schema['luckydraw_type'] = array(
-    'description' => 'Luckydraw types',
-    'fields' => array(
-      'id' => array(
-        'description' => 'Primary key: unique luckydraw type identifer.',
-        'type' => 'serial',
-        'not null' => TRUE,
-      ),
-      'type' => array(
-        'description' => 'The machince name of luckydraw type.',
-        'type' => 'varchar',
-        'length' => 32,
-        'not null' => TRUE,
-        'default' => '',
-      ),
-      'name' => array(
-        'description' => 'The name of luckydraw type.',
-        'type' => 'varchar',
-        'length' => 255,
-        'not null' => TRUE,
-        'default' => '',
-      ),
-      'description' => array(
-        'description' => 'An introduction to the type.',
-        'type' => 'varchar',
-        'length' => 255,
-        'not null' => TRUE,
-        'default' => '',
-      ),
-    ),
-    'primary key' => array('id'),
-    'unique keys' => array(
-      'type' => array('type'),
-    ),
-  );
-
-  $schema['luckydraw_results'] = array(
+  $schema['luckydraw_transactions'] = array(
     'description' => 'Store the luckydraw player and results',
     'fields' => array(
       'uid' => array(
@@ -201,11 +172,12 @@ function luckydraw_schema() {
         'not null' => TRUE,
         'default' => 0,
       ),
-      'result' => array(
-        'description' => 'An explanation of how user played and gained',
-        'type' => 'text',
-        ''
-      ),
+//      'result' => array(
+//        'description' => 'An explanation of how user played and gained',
+//        'type' => 'text',
+//        'serialize' => TRUE,
+//        'not null' => FALSE,
+//      ),
       'created' => array(
         'description' => 'Timestamp value of when the item is created',
         'type' => 'int',

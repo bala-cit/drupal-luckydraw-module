@@ -22,7 +22,7 @@ class LuckyDrawUIController extends EntityDefaultUIController {
       'page arguments' => array($this->entityType . '_overview_form', $this->entityType),
       'description' => 'Manage ' . $plural_label . '.',
       'access callback' => 'entity_access',
-      'access arguments' => array('view', $this->entityType),
+      'access arguments' => array('edit', $this->entityType),
       'file' => 'includes/entity.ui.inc',
     );
 
@@ -34,7 +34,7 @@ class LuckyDrawUIController extends EntityDefaultUIController {
       'title arguments' => array('add', $this->entityType),
       'description' => 'Add a luckydraw.',
       'page callback' => 'luckydraw_add_page',
-      'page arguments' => array($this->entityType, NULL, 'add'),
+      //'page arguments' => array($this->entityType, NULL, 'add'),
       'access callback' => 'luckydraw_access',
       'access arguments' => array('create', $this->entityType),
       'type' => MENU_NORMAL_ITEM,
@@ -47,7 +47,7 @@ class LuckyDrawUIController extends EntityDefaultUIController {
         'title' => 'Add ' . $type->name,
         'description' => $type->description,
         'page callback' => 'luckydraw_form_wrapper',
-        'page arguments' => array(luckydraw_create(array('type' => $type->type))),
+        'page arguments' => array($id_count + 1),
         'access callback' => 'luckydraw_access',
         'access arguments' => array('edit', 'edit any luckydraw entities'),
         'file' => 'includes/luckydraw.admin.inc',
@@ -57,6 +57,17 @@ class LuckyDrawUIController extends EntityDefaultUIController {
 
     $items[$this->path . '/manage/' . $wildcard] = array(
       'page callback' => 'luckydraw_form_wrapper',
+      'page arguments' => array($id_count + 1),
+      'access callback' => 'luckydraw_access',
+      'access arguments' => array('edit', $id_count + 1),
+      'weight' => 0,
+      'context' => MENU_CONTEXT_PAGE | MENU_CONTEXT_INLINE,
+      'file' => 'includes/luckydraw.admin.inc',
+      'file path' => drupal_get_path('module', $this->entityInfo['module']),
+    );
+
+    $items[$this->path . '/manage/' . $wildcard . '/results'] = array(
+      'page callback' => 'luckydraw_results_page',
       'page arguments' => array($id_count + 1),
       'access callback' => 'luckydraw_access',
       'access arguments' => array('edit', $id_count + 1),
@@ -110,6 +121,7 @@ class LuckyDrawUIController extends EntityDefaultUIController {
   protected function overviewTableRow($conditions, $id, $entity, $additional_cols = array()) {
     $row = parent::overviewTableRow($conditions, $id, $entity, $additional_cols);
     $row[] = l(t('items'), $this->path . '/manage/' . $id . '/items');
+    $row[] = l(t('results'), $this->path . '/manage/' . $id . '/results');
     return $row;
   }
 
@@ -126,7 +138,7 @@ class LuckyDrawUIController extends EntityDefaultUIController {
 
     foreach ($headers as &$header) {
       if (is_array($header) && $header['data'] == t('Operations')) {
-        $header['colspan'] += 1;
+        $header['colspan'] += 2; // add two addition links
       }
     }
 
@@ -138,6 +150,13 @@ function luckydraw_form($form, &$form_state) {
   return __FUNCTION__;
 }
 
+/**
+ * Add a luckydraw page
+ * If there is just one type will directly to the add form, otherwise, to select one.
+ *
+ * @return string
+ * @throws Exception
+ */
 function luckydraw_add_page() {
   $item = menu_get_item();
   $content = system_admin_menu_block($item);
@@ -151,12 +170,61 @@ function luckydraw_add_page() {
   return theme('luckydraw_add_list', array('content' => $content));
 }
 
-function luckydraw_form_wrapper($luckydraw) {
-  return drupal_get_form('luckydraw_edit_form', $luckydraw);
+/**
+ * Luckydraw add / edit form wrapper
+ *
+ * @param null $arg
+ * @return array|mixed
+ */
+function luckydraw_form_wrapper($arg = NULL) {
+  if (empty($arg) || !is_object($arg)) {
+    $arg = luckydraw_create(array('type' => $arg));
+  }
+  return drupal_get_form('luckydraw_edit_form', $arg);
 }
 
+/**
+ * @param $luckydraw
+ * @return array|mixed
+ */
 function luckydraw_delete_form_wrapper($luckydraw) {
-  return __FUNCTION__;
+  return drupal_get_form('luckydraw_delete_confirm', $luckydraw);
+}
+
+/**
+ * @param $form
+ * @param $form_state
+ * @param $luckydraw
+ * @return mixed
+ */
+function luckydraw_delete_confirm($form, &$form_state, $luckydraw) {
+
+  $form['markup']['#markup'] =
+    t('Are you sure you want to delete the luckydraw !name and all its items?
+    This action cannot be undo and the items could also linked to users who won the prize,
+    after deleted, the history of this will be lost!', array('!name' => $luckydraw->name));
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Confirm to delete'),
+    '#prefix' => '<p>',
+    '#suffix' => '<a href="/admin/content/luckydraws">' . t('Cancel') . '</a></p>',
+  );
+
+  $form_state['luckydraw'] = $luckydraw;
+
+  return $form;
+}
+
+/**
+ * Delete confirmation
+ *
+ * @param $form
+ * @param $form_state
+ */
+function luckydraw_delete_confirm_submit($form, &$form_state) {
+  luckydraw_delete($form_state['luckydraw']);
+  drupal_set_message(t('!name and its items are being deleted.', array('!name' => $form_state['luckydraw']->name)));
 }
 
 /**
@@ -178,6 +246,13 @@ function luckydraw_edit_form($form, &$form_state, $luckydraw) {
     '#type' => 'textarea',
     '#title' => t('An introduction to the luckydraw for administrators.'),
     '#default_value' => isset($luckydraw->description) ? $luckydraw->description : '',
+  );
+
+  $form['status'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Publish / Unpublish'),
+    '#description' => t('Active the luckydraw by check it or disable by uncheck it.'),
+    '#default_value' => isset($luckydraw->status) ? $luckydraw->status : 1,
   );
 
   $form['additional_settings'] = array(
@@ -205,6 +280,20 @@ function luckydraw_edit_form($form, &$form_state, $luckydraw) {
     '#description' => t('Display this help text on the lucky draw to users.'),
     '#default_value' => isset($luckydraw->settings['display_help_text']) ? $luckydraw->settings['display_help_text'] : '',
   );
+//
+//  $form['display_settings']['settings']['win_message'] = array(
+//    '#type' => 'textarea',
+//    '#title' => t('Message to display when user won a prize'),
+//    '#description' => t('Give a friendly message to end user when win a prize.'),
+//    '#default_value' => isset($luckydraw->settings['win_message']) ? $luckydraw->settings['win_message'] : '',
+//  );
+//
+//  $form['display_settings']['settings']['lose_message'] = array(
+//    '#type' => 'textarea',
+//    '#title' => t('Message to display when user has drawn no prize'),
+//    '#description' => t('Give a friendly message to end user when they have drawn no prize.'),
+//    '#default_value' => isset($luckydraw->settings['lose_message']) ? $luckydraw->settings['lose_message'] : '',
+//  );
 
   //$form['additional_settings']['settings']['#tree'] = TRUE;
 
@@ -291,9 +380,59 @@ function theme_luckydraw_add_list(&$variables) {
     $output .= '</dl>';
   }
   else {
-    $output = '<p>' . t('No luckydraw types have been created yet.') . '</p>';
+    $output = '<p>' . t('No luckydraw types have been created yet.
+      Please enable the module implements the luckydraw type firstly.') . '</p>';
   }
 
   return $output;
 }
 
+/**
+ * The luckydraw result list
+ *
+ * @param $luckydraw
+ * @return rendable array
+ */
+function luckydraw_results_page($luckydraw) {
+  $transactions = luckydraw_transactions_load($luckydraw);
+
+  // This function only exists for PHP > 5.5.0
+  if (!function_exists('array_columns')) {
+    function array_column($array, $column_name) {
+      return array_map(function($element) use($column_name) {return $element[$column_name];}, $array);
+    }
+  }
+
+  $uids = array_column($transactions, 'uid');
+  $users = user_load_multiple($uids);
+
+  $headers = array(
+    array('data' => t('User'), 'field' => 'uid'),
+    array('data' => t('Drawn')),
+    array('data' => t('Result')),
+    array('data' => t('When'), 'field' => 'created')
+  );
+
+  $rows = array();
+  $luckydraw_item_path = 'luckydraw-item/';
+  foreach ($transactions as $tran) {
+    $rows[] = array(
+      $users[$tran['uid']]->name,
+      l($tran['name'], $luckydraw_item_path . $tran['liid']),
+      $tran['data'],
+      date('Y-m-d H:i:s', $tran['created'])
+    );
+  }
+
+  $variables = array(
+    'header' => $headers,
+    'rows' => $rows,
+    'attributes' => array(),
+    'caption' => '',
+    'colgroups' => array(),
+    'sticky' => '',
+    'empty' => t('There is no results yet'),
+  );
+
+  return theme_table($variables);
+}
